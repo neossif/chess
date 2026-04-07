@@ -8,6 +8,55 @@ const PIECE_NAMES = {
     k: 'Luffy', q: 'Shanks', r: 'Thousand Sunny', b: 'Zoro', n: 'Sanji', p: 'Pirata'
 };
 
+class SoundManager {
+    constructor() {
+        this.context = null;
+    }
+
+    getContext() {
+        if (!this.context) {
+            const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+            this.context = new AudioContextClass();
+        }
+        if (this.context.state === 'suspended') {
+            this.context.resume();
+        }
+        return this.context;
+    }
+
+    playTone(frequency, duration, type = 'sine', gainValue = 0.05) {
+        const ctx = this.getContext();
+        const oscillator = ctx.createOscillator();
+        const gain = ctx.createGain();
+        oscillator.type = type;
+        oscillator.frequency.value = frequency;
+        gain.gain.value = gainValue;
+        oscillator.connect(gain);
+        gain.connect(ctx.destination);
+        oscillator.start();
+        oscillator.stop(ctx.currentTime + duration);
+    }
+
+    move() {
+        this.playTone(440, 0.08, 'triangle', 0.04);
+    }
+
+    capture() {
+        this.playTone(660, 0.09, 'square', 0.05);
+        setTimeout(() => this.playTone(330, 0.12, 'sawtooth', 0.04), 70);
+    }
+
+    check() {
+        this.playTone(523.25, 0.12, 'sine', 0.05);
+        setTimeout(() => this.playTone(659.25, 0.12, 'sine', 0.05), 100);
+    }
+
+    victory() {
+        const notes = [523.25, 659.25, 783.99, 1046.5];
+        notes.forEach((note, index) => setTimeout(() => this.playTone(note, 0.12, 'triangle', 0.05), index * 120));
+    }
+}
+
 const INITIAL_BOARD = [
     ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r'],
     ['p', 'p', 'p', 'p', 'p', 'p', 'p', 'p'],
@@ -36,6 +85,7 @@ class ChessGame {
         this.castlingRights = { K: true, Q: true, k: true, q: true };
         this.enPassantTarget = null;
         this.gameOver = false;
+        this.lastAction = null;
     }
 
     isWhite(piece) { return piece && piece === piece.toUpperCase(); }
@@ -261,6 +311,12 @@ class ChessGame {
         this.board[toR][toC] = piece;
         this.board[fromR][fromC] = null;
 
+        this.lastAction = {
+            capture: Boolean(captured),
+            castle: piece.toUpperCase() === 'K' && Math.abs(toC - fromC) === 2,
+            promotion: piece.toUpperCase() === 'P' && (toR === 0 || toR === 7)
+        };
+
         if (piece.toUpperCase() === 'P' && (toR === 0 || toR === 7)) {
             this.board[toR][toC] = color === 'white' ? 'Q' : 'q';
         }
@@ -320,6 +376,7 @@ class ChessGame {
         this.currentPlayer = this.pieceColor(move.piece);
         this.selectedSquare = null;
         this.validMoves = [];
+        this.lastAction = null;
 
         if (this.moveHistory.length > 0) {
             const prev = this.moveHistory[this.moveHistory.length - 1];
@@ -338,18 +395,18 @@ class ChessGame {
         if (!hasLegalMoves) {
             this.gameOver = true;
             if (inCheck) {
-                const winner = this.currentPlayer === 'white' ? 'Piratas' : 'Marina';
-                return { status: 'checkmate', winner: this.currentPlayer === 'white' ? 'black' : 'white', message: `¡Jaque Mate! Gana la ${winner} 🏴‍☠️` };
+                const winner = this.currentPlayer === 'white' ? 'JD' : 'Oliver';
+                return { status: 'checkmate', winner: this.currentPlayer === 'white' ? 'black' : 'white', message: `¡Jaque Mate! Gana ${winner} 🏆` };
             } else {
                 return { status: 'stalemate', winner: null, message: '¡Tablas por ahogado! 🤝' };
             }
         }
 
         if (inCheck) {
-            return { status: 'check', winner: null, message: `¡Jaque! Turno de la ${this.currentPlayer === 'white' ? 'Marina' : 'Piratas'} ⚠️` };
+            return { status: 'check', winner: null, message: `¡Jaque! Turno de ${this.currentPlayer === 'white' ? 'Oliver' : 'JD'} ⚠️` };
         }
 
-        return { status: 'playing', winner: null, message: `Turno de la ${this.currentPlayer === 'white' ? 'Marina' : 'Piratas'}` };
+        return { status: 'playing', winner: null, message: `Turno de ${this.currentPlayer === 'white' ? 'Oliver' : 'JD'}` };
     }
 
     getHint() {
@@ -382,6 +439,7 @@ class ChessGame {
 class ChessUI {
     constructor() {
         this.game = new ChessGame();
+        this.sound = new SoundManager();
         this.boardEl = document.getElementById('board');
         this.statusEl = document.getElementById('status');
         this.modalEl = document.getElementById('modal');
@@ -457,6 +515,11 @@ class ChessUI {
 
             if (isValid) {
                 this.game.makeMove(sr, sc, r, c);
+                if (this.game.lastAction?.capture) {
+                    this.sound.capture();
+                } else {
+                    this.sound.move();
+                }
                 this.clearHint();
                 this.render();
                 this.checkGameState();
@@ -564,6 +627,10 @@ class ChessUI {
         const state = this.game.checkGameState();
         this.statusEl.textContent = state.message;
 
+        if (state.status === 'check') {
+            this.sound.check();
+        }
+
         if (state.status === 'checkmate' || state.status === 'stalemate') {
             setTimeout(() => {
                 const icon = state.status === 'checkmate' ? '🏆' : '🤝';
@@ -571,11 +638,11 @@ class ChessUI {
                 let message, bounty;
                 if (state.status === 'checkmate') {
                     if (state.winner === 'white') {
-                        message = '¡La Marina domina los mares!';
-                        bounty = 'RECOMPENSA: ¡JUSTICIA ABSOLUTA! ⚖️';
+                        message = '¡Oliver domina los mares!';
+                        bounty = 'RECOMPENSA: ¡GLORIA PARA OLIVER!';
                     } else {
-                        message = '¡Los Piratas conquistan el Grand Line!';
-                        bounty = 'RECOMPENSA: ¡REY DE LOS PIRATAS! 👑';
+                        message = '¡JD conquista el Grand Line!';
+                        bounty = 'RECOMPENSA: ¡GLORIA PARA JD!';
                     }
                 } else {
                     message = '¡La batalla termina en empate!';
@@ -586,6 +653,9 @@ class ChessUI {
                 document.getElementById('modal-message').textContent = message;
                 document.getElementById('bounty-text').textContent = bounty;
                 this.modalEl.classList.remove('hidden');
+                if (state.status === 'checkmate') {
+                    this.sound.victory();
+                }
             }, 500);
         }
     }
@@ -595,7 +665,7 @@ class ChessUI {
         this.clearHint();
         this.modalEl.classList.add('hidden');
         this.render();
-        this.statusEl.textContent = 'Turno de la Marina';
+        this.statusEl.textContent = 'Turno de Oliver';
     }
 
     undo() {

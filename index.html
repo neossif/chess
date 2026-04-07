@@ -3,18 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ajedrez Luffy vs Zoro</title>
+    <title>Oliver vs JD</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="container">
-        <h1 class="title">👒 Luffy vs Zoro ⚔️</h1>
+        <h1 class="title">Oliver vs JD</h1>
         
         <div class="game-area">
             <div class="player-info" id="black-info">
-                <div class="avatar zoro-avatar">⚔️</div>
+                <div class="avatar zoro-avatar">
+                    <img src="zoro.jpg" alt="Zoro">
+                </div>
                 <div class="player-details">
-                    <span class="player-name">Zoro</span>
+                    <span class="player-name">JD</span>
                     <span class="captured-pieces" id="black-captured"></span>
                 </div>
             </div>
@@ -29,21 +31,23 @@
             </div>
 
             <div class="player-info active-player" id="white-info">
-                <div class="avatar luffy-avatar">👒</div>
+                <div class="avatar luffy-avatar">
+                    <img src="luffy.jpg" alt="Luffy">
+                </div>
                 <div class="player-details">
-                    <span class="player-name">Luffy</span>
+                    <span class="player-name">Oliver</span>
                     <span class="captured-pieces" id="white-captured"></span>
                 </div>
             </div>
         </div>
 
         <div class="controls">
-            <button class="btn btn-primary" id="new-game-btn">👒 Nueva Partida</button>
+            <button class="btn btn-primary" id="new-game-btn">Nueva Partida</button>
             <button class="btn btn-secondary" id="undo-btn">↩️ Deshacer</button>
             <button class="btn btn-accent" id="hint-btn">🗺️ Pista</button>
         </div>
 
-        <div class="status-bar" id="status">Turno de Luffy</div>
+        <div class="status-bar" id="status">Turno de Oliver</div>
     </div>
 
     <div class="modal hidden" id="modal">
@@ -53,7 +57,7 @@
             <h2 class="modal-title" id="modal-title">¡Victoria!</h2>
             <p class="modal-message" id="modal-message"></p>
             <div class="bounty-text" id="bounty-text"></div>
-            <button class="btn btn-primary" id="modal-btn">⚔️ Jugar de Nuevo</button>
+            <button class="btn btn-primary" id="modal-btn">Jugar de Nuevo</button>
         </div>
     </div>
 
