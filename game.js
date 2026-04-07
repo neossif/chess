@@ -11,6 +11,9 @@ const PIECE_NAMES = {
 class SoundManager {
     constructor() {
         this.context = null;
+        this.musicTimer = null;
+        this.musicPlaying = false;
+        this.musicStep = 0;
     }
 
     getContext() {
@@ -37,12 +40,30 @@ class SoundManager {
         oscillator.stop(ctx.currentTime + duration);
     }
 
-    move() {
-        this.playTone(440, 0.08, 'triangle', 0.04);
+    move(piece) {
+        const tones = {
+            P: [523.25, 'triangle'],
+            N: [392, 'square'],
+            B: [466.16, 'sine'],
+            R: [349.23, 'triangle'],
+            Q: [659.25, 'sawtooth'],
+            K: [587.33, 'sine']
+        };
+        const [frequency, type] = tones[piece?.toUpperCase?.() || 'P'] || [440, 'triangle'];
+        this.playTone(frequency, 0.08, type, 0.045);
     }
 
-    capture() {
-        this.playTone(660, 0.09, 'square', 0.05);
+    capture(piece) {
+        const tones = {
+            P: 740,
+            N: 784,
+            B: 831,
+            R: 880,
+            Q: 988,
+            K: 1046
+        };
+        const frequency = tones[piece?.toUpperCase?.() || 'P'] || 660;
+        this.playTone(frequency, 0.09, 'square', 0.05);
         setTimeout(() => this.playTone(330, 0.12, 'sawtooth', 0.04), 70);
     }
 
@@ -54,6 +75,69 @@ class SoundManager {
     victory() {
         const notes = [523.25, 659.25, 783.99, 1046.5];
         notes.forEach((note, index) => setTimeout(() => this.playTone(note, 0.12, 'triangle', 0.05), index * 120));
+    }
+
+    startMusic() {
+        if (this.musicPlaying) return;
+        this.musicPlaying = true;
+        this.musicStep = 0;
+        const melody = [
+            [523.25, 0.14], [659.25, 0.14], [783.99, 0.14], [1046.5, 0.12],
+            [987.77, 0.12], [783.99, 0.14], [880, 0.12], [1046.5, 0.12],
+            [523.25, 0.14], [659.25, 0.14], [698.46, 0.14], [880, 0.16],
+            [783.99, 0.14], [659.25, 0.14], [587.33, 0.18], [523.25, 0.2],
+            [659.25, 0.14], [783.99, 0.14], [987.77, 0.14], [880, 0.14],
+            [783.99, 0.16], [659.25, 0.18], [587.33, 0.22], [523.25, 0.24]
+        ];
+        const bass = [
+            130.81, 130.81, 146.83, 174.61,
+            174.61, 146.83, 130.81, 123.47,
+            130.81, 146.83, 164.81, 174.61,
+            196, 174.61, 146.83, 130.81,
+            146.83, 164.81, 174.61, 196,
+            174.61, 146.83, 130.81, 123.47
+        ];
+        const drum = [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1];
+
+        const playStep = () => {
+            if (!this.musicPlaying) return;
+            const step = this.musicStep % melody.length;
+            const [note, duration] = melody[step];
+            const bassNote = bass[step];
+            this.playTone(bassNote, 0.28, 'sine', 0.025);
+            this.playTone(note, duration, 'triangle', 0.032);
+            if (drum[step]) {
+                this.playTone(82, 0.05, 'square', 0.014);
+            }
+            if (step % 4 === 0) {
+                this.playTone(note * 2, 0.1, 'sine', 0.015);
+            }
+            if (step % 8 === 4) {
+                this.playTone(note * 1.5, 0.08, 'triangle', 0.012);
+            }
+            this.musicStep += 1;
+            this.musicTimer = setTimeout(playStep, 230);
+        };
+
+        playStep();
+    }
+
+    stopMusic() {
+        this.musicPlaying = false;
+        if (this.musicTimer) {
+            clearTimeout(this.musicTimer);
+            this.musicTimer = null;
+        }
+    }
+
+    toggleMusic() {
+        if (this.musicPlaying) {
+            this.stopMusic();
+            return false;
+        }
+        this.getContext();
+        this.startMusic();
+        return true;
     }
 }
 
@@ -314,7 +398,8 @@ class ChessGame {
         this.lastAction = {
             capture: Boolean(captured),
             castle: piece.toUpperCase() === 'K' && Math.abs(toC - fromC) === 2,
-            promotion: piece.toUpperCase() === 'P' && (toR === 0 || toR === 7)
+            promotion: piece.toUpperCase() === 'P' && (toR === 0 || toR === 7),
+            piece
         };
 
         if (piece.toUpperCase() === 'P' && (toR === 0 || toR === 7)) {
@@ -443,6 +528,8 @@ class ChessUI {
         this.boardEl = document.getElementById('board');
         this.statusEl = document.getElementById('status');
         this.modalEl = document.getElementById('modal');
+        this.musicBtn = document.getElementById('music-btn');
+        this.introScreen = document.getElementById('intro-screen');
         this.hintSquare = null;
         this.init();
     }
@@ -456,12 +543,14 @@ class ChessUI {
 
     createBoard() {
         this.boardEl.innerHTML = '';
+        let delay = 0;
         for (let r = 0; r < 8; r++) {
             for (let c = 0; c < 8; c++) {
                 const square = document.createElement('div');
                 square.className = `square ${(r + c) % 2 === 0 ? 'light' : 'dark'}`;
                 square.dataset.row = r;
                 square.dataset.col = c;
+                square.style.setProperty('--delay', delay++);
                 this.boardEl.appendChild(square);
             }
         }
@@ -498,13 +587,19 @@ class ChessUI {
         document.getElementById('new-game-btn').addEventListener('click', () => this.newGame());
         document.getElementById('undo-btn').addEventListener('click', () => this.undo());
         document.getElementById('hint-btn').addEventListener('click', () => this.showHint());
+        document.getElementById('start-game-btn').addEventListener('click', () => this.startBattle());
+        this.musicBtn.addEventListener('click', () => {
+            const on = this.sound.toggleMusic();
+            this.musicBtn.textContent = on ? '⏸ Música' : '🎵 Música';
+            this.musicBtn.classList.toggle('active-music', on);
+        });
         document.getElementById('modal-btn').addEventListener('click', () => {
             this.modalEl.classList.add('hidden');
             this.newGame();
         });
     }
 
-    handleSquareClick(r, c) {
+    async handleSquareClick(r, c) {
         if (this.game.gameOver) return;
 
         const piece = this.game.board[r][c];
@@ -514,11 +609,15 @@ class ChessUI {
             const isValid = this.game.validMoves.some(([mr, mc]) => mr === r && mc === c);
 
             if (isValid) {
+                const movingPiece = this.game.board[sr][sc];
+                const capturedPiece = this.game.board[r][c];
+                await this.animateMove(sr, sc, r, c, movingPiece, capturedPiece);
                 this.game.makeMove(sr, sc, r, c);
                 if (this.game.lastAction?.capture) {
-                    this.sound.capture();
+                    this.sound.capture(this.game.lastAction.piece);
+                    this.animateImpact(r, c, true);
                 } else {
-                    this.sound.move();
+                    this.sound.move(this.game.lastAction.piece);
                 }
                 this.clearHint();
                 this.render();
@@ -547,6 +646,61 @@ class ChessUI {
     selectSquare(r, c) {
         this.game.selectedSquare = [r, c];
         this.game.validMoves = this.game.getLegalMoves(r, c);
+    }
+
+    animateMove(fromR, fromC, toR, toC, piece, capturedPiece) {
+        return new Promise((resolve) => {
+            const fromSquare = this.boardEl.querySelector(`.square[data-row="${fromR}"][data-col="${fromC}"]`);
+            const toSquare = this.boardEl.querySelector(`.square[data-row="${toR}"][data-col="${toC}"]`);
+            if (!fromSquare || !toSquare) {
+                resolve();
+                return;
+            }
+
+            const fromRect = fromSquare.getBoundingClientRect();
+            const toRect = toSquare.getBoundingClientRect();
+
+            const ghost = document.createElement('div');
+            ghost.className = 'move-ghost';
+            ghost.textContent = PIECES[piece];
+            ghost.style.left = `${fromRect.left}px`;
+            ghost.style.top = `${fromRect.top}px`;
+            ghost.style.width = `${fromRect.width}px`;
+            ghost.style.height = `${fromRect.height}px`;
+            ghost.style.fontSize = `${Math.max(32, fromRect.width * 0.62)}px`;
+            ghost.style.lineHeight = `${fromRect.height}px`;
+            document.body.appendChild(ghost);
+
+            const captureBurst = capturedPiece ? document.createElement('div') : null;
+            if (captureBurst) {
+                captureBurst.className = 'capture-burst';
+                captureBurst.style.left = `${toRect.left + toRect.width / 2}px`;
+                captureBurst.style.top = `${toRect.top + toRect.height / 2}px`;
+                document.body.appendChild(captureBurst);
+                toSquare.classList.add('capture-hit');
+            }
+
+            requestAnimationFrame(() => {
+                ghost.style.left = `${toRect.left}px`;
+                ghost.style.top = `${toRect.top}px`;
+                ghost.style.transform = 'scale(1.08) rotate(3deg)';
+                if (captureBurst) captureBurst.classList.add('show');
+            });
+
+            setTimeout(() => {
+                ghost.remove();
+                if (captureBurst) captureBurst.remove();
+                toSquare.classList.remove('capture-hit');
+                resolve();
+            }, capturedPiece ? 330 : 260);
+        });
+    }
+
+    animateImpact(r, c, capture = false) {
+        const square = this.boardEl.querySelector(`.square[data-row="${r}"][data-col="${c}"]`);
+        if (!square) return;
+        square.classList.add(capture ? 'capture-hit' : 'move-hit');
+        setTimeout(() => square.classList.remove(capture ? 'capture-hit' : 'move-hit'), 240);
     }
 
     render() {
@@ -666,6 +820,21 @@ class ChessUI {
         this.modalEl.classList.add('hidden');
         this.render();
         this.statusEl.textContent = 'Turno de Oliver';
+        if (this.sound.musicPlaying) {
+            this.sound.stopMusic();
+            this.sound.startMusic();
+        }
+    }
+
+    startBattle() {
+        document.body.classList.add('battle-started');
+        this.introScreen.classList.add('fade-out');
+        setTimeout(() => this.introScreen.classList.add('hidden-start'), 550);
+        if (!this.sound.musicPlaying) {
+            const on = this.sound.toggleMusic();
+            this.musicBtn.textContent = on ? '⏸ Música' : '🎵 Música';
+            this.musicBtn.classList.toggle('active-music', on);
+        }
     }
 
     undo() {
